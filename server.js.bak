@@ -68,34 +68,6 @@ async function samsara(pathname){const r=await fetch('https://api.samsara.com'+p
 app.get('/api/samsara/vehicles',async(req,res)=>{if(!samsaraConfigured())return res.status(503).json({error:'Samsara API token not configured'});try{const x=await samsara('/fleet/vehicles?limit=512');res.status(x.status).json(x.data)}catch(e){res.status(500).json({error:e.message})}});
 app.get('/api/samsara/locations',async(req,res)=>{if(!samsaraConfigured())return res.status(503).json({error:'Samsara API token not configured'});try{const x=await samsara('/fleet/vehicles/locations');res.status(x.status).json(x.data)}catch(e){res.status(500).json({error:e.message})}});
 
-// Near-real-time location feed. Samsara recommends polling the feed at least every
-// 5 seconds; the cursor lets us receive only new GPS events after the first snapshot.
-let samsaraFeedCursor=null;
-let samsaraFeedPrimed=false;
-let samsaraFeedBusy=false;
-app.get('/api/samsara/live',async(req,res)=>{
-  if(!samsaraConfigured())return res.status(503).json({error:'Samsara API token not configured'});
-  if(samsaraFeedBusy)return res.status(429).json({error:'Live sync already in progress'});
-  samsaraFeedBusy=true;
-  try{
-    if(!samsaraFeedPrimed || req.query.reset==='1'){
-      const snap=await samsara('/fleet/vehicles/locations');
-      if(snap.status>=400)return res.status(snap.status).json(snap.data);
-      const feed=await samsara('/fleet/vehicles/locations/feed?limit=512');
-      if(feed.status<400)samsaraFeedCursor=feed.data?.pagination?.endCursor||feed.data?.pagination?.end_cursor||null;
-      samsaraFeedPrimed=true;
-      return res.json({initial:true,data:snap.data?.data||[],pagination:snap.data?.pagination||null,serverTime:new Date().toISOString()});
-    }
-    const qs=samsaraFeedCursor?`?after=${encodeURIComponent(samsaraFeedCursor)}&limit=512`:'?limit=512';
-    const feed=await samsara(`/fleet/vehicles/locations/feed${qs}`);
-    if(feed.status>=400)return res.status(feed.status).json(feed.data);
-    const data=feed.data?.data||[];
-    samsaraFeedCursor=feed.data?.pagination?.endCursor||feed.data?.pagination?.end_cursor||samsaraFeedCursor;
-    res.json({initial:false,data,pagination:feed.data?.pagination||null,serverTime:new Date().toISOString()});
-  }catch(e){res.status(500).json({error:e.message})}
-  finally{samsaraFeedBusy=false}
-});
-
 let knoxToken={value:null,expires:0};
 async function getKnoxToken(){if(knoxToken.value&&Date.now()<knoxToken.expires-60000)return knoxToken.value;const region=process.env.KNOX_REGION||'ap01';const body=new URLSearchParams({grant_type:'client_credentials',client_id:`${process.env.KNOX_CLIENT_ID}@${process.env.KNOX_TENANT_ID}`,client_secret:process.env.KNOX_CLIENT_SECRET});const r=await fetch(`https://${region}.manage.samsungknox.com/emm/oauth/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});const d=await r.json();if(!r.ok)throw new Error(d.error_description||d.error||'Knox token request failed');knoxToken={value:d.access_token,expires:Date.now()+(Number(d.expires_in)||3600)*1000};return knoxToken.value;}
 app.post('/api/knox/locations',async(req,res)=>{if(!knoxConfigured())return res.status(503).json({error:'Knox API credentials not configured'});const list=Array.isArray(req.body?.devices)?req.body.devices:[];if(!list.length)return res.json({locations:[]});try{const region=process.env.KNOX_REGION||'ap01';const token=await getKnoxToken();const out=[];for(const item of list.slice(0,100)){const mobileId=item.mobileId||item.imei;const body=new URLSearchParams();body.set('mobileId',mobileId);try{const r=await fetch(`https://${region}.manage.samsungknox.com/emm/oapi/device/selectDeviceLocation`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/x-www-form-urlencoded'},body});const d=await r.json();if(r.ok)out.push({imei:String(item.imei||mobileId),mobileId,...(d.data||d.result||d)});}catch{}}res.json({locations:out,checked:list.length,returned:out.length,serverTime:new Date().toISOString()});}catch(e){res.status(500).json({error:e.message})}});
