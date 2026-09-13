@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FleetCommand — Knox × Samsara</title>
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="topline"></div>
+<header class="site-header">
+  <div class="brand-wrap">
+    <div class="brand-logo"><span></span><span></span><span></span></div>
+    <div><strong>FLEET<span>COMMAND</span></strong><small>Knox × Samsara</small></div>
+  </div>
+  <nav class="main-nav">
+    <button class="nav-link active" data-nav="dashboard">Overview</button>
+    <button class="nav-link" data-nav="live">Live Fleet <b id="liveNavCount">0</b></button>
+    <button class="nav-link" data-nav="tablets">Tablets</button>
+    <button class="nav-link" data-nav="drivers">Drivers</button>
+    <button class="nav-link" data-nav="assignments">Assignments</button>
+    <button class="nav-link alert-link" data-nav="alerts">GPS Alerts <b id="alertNavCount">0</b></button>
+  </nav>
+  <div class="header-status"><i></i><div><strong>System LIVE</strong><small id="health">Connecting…</small></div><span class="operator">FO</span></div>
+</header>
+
+<main class="page">
+  <section class="hero">
+    <div><div class="crumb">OPERATIONS CENTER <span>→</span> FLEET OVERVIEW</div><h1>Fleet overview</h1><p>Real-time visibility across trucks, drivers and Knox tablets.</p></div>
+    <div class="hero-actions"><div class="sync-info"><i></i><div><strong>Live connection</strong><small id="lastSync">Waiting for first sync</small></div></div><button class="btn secondary" onclick="syncSamsara()">↻ Sync now</button><button class="btn primary" onclick="openAssign()">＋ Assign tablet</button></div>
+  </section>
+
+  <section class="stats">
+    <article><div class="stat-icon teal">▣</div><small>KNOX TABLETS</small><strong id="deviceCount">0</strong><span>Registered devices</span></article>
+    <article><div class="stat-icon blue">⇄</div><small>ASSIGNMENTS</small><strong id="assignedCount">0</strong><span>Active pairings</span></article>
+    <article><div class="stat-icon purple">🚛</div><small>FLEET VEHICLES</small><strong id="vehicleCount">0</strong><span>Samsara vehicles</span></article>
+    <article><div class="stat-icon green">●</div><small>LIVE GPS</small><strong id="liveCount">0</strong><span>Vehicles reporting</span></article>
+    <article><div class="stat-icon success">✓</div><small>MATCHED</small><strong id="matchCount">0</strong><span>Within 0.5 miles</span></article>
+    <article><div class="stat-icon danger">!</div><small>GPS MISMATCH</small><strong id="mismatchCount">0</strong><span>Over 2 miles</span></article>
+  </section>
+
+  <section class="searchbar">
+    <div class="search"><span>⌕</span><input id="search" autocomplete="off" placeholder="Search tablet, IMEI, driver, truck or Samsara vehicle"><button onclick="document.getElementById('search').value='';render()">×</button></div>
+    <select id="filter"><option value="all">All tablets</option><option value="assigned">Assigned only</option><option value="unassigned">Unassigned only</option></select>
+    <button class="btn secondary" onclick="fitAll()">⌖ Fit map</button>
+  </section>
+
+  <section class="flow-banner">
+    <div class="flow-label"><strong>ASSIGNMENT FLOW</strong><small>One connected chain from device to truck</small></div>
+    <div class="flow"><div class="flow-node"><span>▣</span><strong>Tablet</strong><small>Knox device</small></div><div class="arrow">━━━━━━━━▶</div><div class="flow-node"><span>♙</span><strong>Driver</strong><small>Assigned driver</small></div><div class="arrow">━━━━━━━━▶</div><div class="flow-node"><span>🚛</span><strong>Truck</strong><small>Unit number</small></div><div class="arrow">━━━━━━━━▶</div><div class="flow-node"><span>◉</span><strong>Samsara</strong><small>Live vehicle GPS</small></div></div>
+  </section>
+
+  <section class="workspace-grid">
+    <div class="panel assignment-panel">
+      <div class="panel-head"><div><div class="panel-title"><h2>Fleet assignments</h2><span id="assignmentViewCount">0</span></div><p>Tablet → Driver → Truck → Samsara</p></div><button class="btn primary small" onclick="openAssign()">＋ Add</button></div>
+      <div class="table-wrap"><table><thead><tr><th>TABLET</th><th>DRIVER</th><th>TRUCK</th><th>SAMSARA</th><th>GPS STATUS</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="table-footer"><span>GPS data updates automatically</span><span><i></i> Auto-refresh · 5 sec</span></div>
+    </div>
+    <div class="panel map-panel">
+      <div class="panel-head"><div><div class="panel-title"><h2>Live fleet map</h2><em>LIVE</em></div><p>Truck + tablet GPS · lines show distance</p></div><div class="map-sources"><span id="mapStatus">Ready</span><span><i class="samsara-dot"></i>Samsara</span><span><i class="knox-dot"></i><b id="knoxStatus">Knox waiting</b></span></div></div>
+      <div class="map-wrap"><div id="map"></div><div class="map-legend"><span><b>🚛</b> Truck</span><span><b>📱</b> Tablet</span><span><i></i> GPS link</span></div><button class="map-fit" onclick="fitAll()">⌖</button></div>
+    </div>
+  </section>
+
+  <section class="status-row"><div><b class="ok">✓</b><strong>Matched</strong><span>Within 0.5 mi</span></div><div><b class="close">~</b><strong>Close</strong><span>Within 2 mi</span></div><div><b class="bad">!</b><strong>Mismatch</strong><span>Over 2 mi</span></div></section>
+</main>
+
+<div id="modal" class="modal hidden"><div class="dialog"><div class="dialog-head"><div><small>FLEET MANAGEMENT</small><h2>Assign tablet</h2><p>Build the complete Tablet → Driver → Truck → Samsara connection.</p></div><button onclick="closeAssign()">×</button></div><form onsubmit="saveAssign(event)"><div class="form-flow"><span>TABLET</span><i>→</i><span>DRIVER</span><i>→</i><span>TRUCK</span><i>→</i><span>SAMSARA</span></div><div class="form-grid"><label>Tablet IMEI<select id="imei" required></select></label><label>Driver<input id="driver" placeholder="Driver name"></label><label>Truck number<input id="truck" placeholder="e.g. 27103"></label><label>Samsara vehicle<select id="samsaraVehicle"><option value="">— none —</option></select></label><label class="full">Notes<textarea id="notes" placeholder="Optional notes"></textarea></label></div><div class="dialog-actions"><button type="button" class="btn secondary" onclick="closeAssign()">Cancel</button><button class="btn primary">Save assignment</button></div></form></div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/app.js"></script><script>function fitAll(){if(window.map&&window.markers?.length){window.map.fitBounds(L.featureGroup(window.markers).getBounds().pad(.12));}}</script>
+</body></html>
